@@ -4,8 +4,8 @@ This repository presents an in-depth exploration of convolutional neural network
 # Table of Contents
 * Experimential Learning Objective & Activities
 * Data
-  - [A. Data Download]
-    - [i. Accessing Data] 
+  - A. Data Download
+    - i. Accessing Data
   - [B. Data Preprocessing]
     - [i. Cleaning]
     - [ii. Data Split] 
