@@ -12,7 +12,7 @@ This repository presents an in-depth exploration of convolutional neural network
     - [i. Cleaning](#i-Cleaning)
     - [ii. Data Split](#ii-Split-Data)
     - [iii. Map Data](#iii-Map-Data)
-* Modeling
+* [Modeling](#Modeling)
   - [A. Parameter Selection](#A-Parameter-Selection)
   - [B. Data Generators](#B-Data-Generators)
   - [C. Model Archeticture](#C-Model-Archeticture)
@@ -207,7 +207,7 @@ images_test = [os.path.join(IMAGES_PATH, image) for image in test_images]
 masks_test = [os.path.join(MASKS_PATH, mask) for mask in test_masks]
 ```
 
-# Modelling
+# Modeling
 Our model was developed for wildfire detection over the Canada Region utilizing a U-Net architecture, a popular choice for image segmentation task. 
 
 ### A. Parameter Selection
