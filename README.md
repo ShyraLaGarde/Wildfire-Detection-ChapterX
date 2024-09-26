@@ -319,11 +319,13 @@ train_generator = generator_from_lists(images_train, masks_train, batch_size=BAT
 validation_generator = generator_from_lists(images_validation, masks_validation, batch_size=BATCH_SIZE, random_state=RANDOM_STATE, image_mode="762")
 ```
 
-NOTE: ``` # Fetch a batch to inspect
+NOTE: To fetch a batch to inspect
+```
 images, masks = next(train_generator)
 print(f'Images shape: {images.shape}')  
 print(f'Masks shape: {masks.shape}')
 ```
+
 
 
 
