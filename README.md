@@ -55,7 +55,7 @@ This part of our guide assumes you have a empty `Data` directory. Here we will d
 Uzip folder to `Data` directory
 After Unziping folder the extracted image patches and mask into the local project directory for Data. These images will have to be in two directories. One for the image patches and on for the corresponding masks these will be stored for training and evaluating the Unet CNN model. 
 
-##### i. Accessing Data 
+#### i. Accessing Data 
 ```
 # get original Patches & Masks
 images_dir = '/Users/local/WildfireDetection/Data/images/patches'
@@ -97,7 +97,7 @@ NOTE: the Number of Kumar-Roy files: 2619 &
       the Number of Murphy files: 1156 & 
       the Number of Schroeder files: 610
 
-##### i. Cleaning 
+#### i. Cleaning 
 Next we will match images with their corresponding masks based on the file names and save these pairs to a CSV file. This CSV will be used for training, validation, and testing splits. 
 
 EDIT: mask_base = os.path.splitext(mask_file)[0].replace("_Kumar-Roy", "")
@@ -146,7 +146,7 @@ print(f"CSV file saved with {len(matching_pairs)} pairs: {csv_output_file}")
 NOTE: Number of corresponding image-mask pairs found: 2619
       CSV file saved with 2619 pairs: image_mask_pairs.csv
 
-##### ii. Split Data 
+#### ii. Split Data 
 Next we want to split our data for Training, Validation, and Testing subsets. To ensure that the model is trained and validated properly. We will be spliting the data 60% for training, 30% for testing and 10% for validation. 
 ```
 CSV_FILE = 'image_mask_pairs.csv'
@@ -186,7 +186,7 @@ print(f"Test set: {len(test_images)} pairs")
 NOTE for Kumar: Training set: 1833 pairs
                 Validation set: 393 pairs
                 Test set: 393 pairs
-##### iii. Map Data              
+#### iii. Map Data              
 Finally, we will map the file names to their full paths, which will be used to load the data during model training and evaluation. 
 ```
 """
