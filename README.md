@@ -26,8 +26,8 @@ For this project we will be using Anaconda. (for installation and help: )
 3. Required packages list
    - Tensorflow (we will  more import packages from this library)
    - Numpy, Pandas, 
-   - Os, Sys, CV2, csv, warnings, rasterio
-   - threading, random, glob, time
+   - Os, Sys, CV2, csv, warnings, rasterio,
+   - threading, random, glob, time,
    - Scikit (we will  more import packages from this library)
    - WandB
    
@@ -41,8 +41,11 @@ cd WildfireDetection
 ```
 - Inside the project directory, create a data folder to store datasets and other required project files
 ```
-mk Data
+mkdir Data
 ``` 
+
+You will then download the data and launch jupyter notebook before running the script to get original Patches & Masks.
+``` Jupyter Notebook``` 
 
 ## Data 
 This part of our guide assumes you have a empty `Data` directory. Here we will download the data required for this study.   
