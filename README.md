@@ -12,7 +12,9 @@ This repository presents an in-depth exploration of convolutional neural network
     - [i. Cleaning](#i-Cleaning)
     - [ii. Data Split](#ii-Split-Data)
     - [iii. Map Data](#iii-Map-Data)
-* Modeling 
+* Modeling
+  - A. Parameter Selection
+  - B. Neural Network Generators 
 
 # Objectives
 
@@ -203,6 +205,33 @@ masks_validation = [os.path.join(MASKS_PATH, mask) for mask in val_masks]
 images_test = [os.path.join(IMAGES_PATH, image) for image in test_images]
 masks_test = [os.path.join(MASKS_PATH, mask) for mask in test_masks]
 ```
+
+# Modelling
+Our model was developed for wildfire detection over the Canada Region utilizing a U-Net architecture, a popular choice for image segmentation task. 
+
+### A. Parameter Selection
+We will set an output directory to store our model results, initally we evaluate the training and validation accuarcy and loss. We will normilize our 256x256 pixel image pairs. Finally define the hyperparameters used to train our model. 
+```
+OUTPUT_DIR = './train_output/'
+
+MAX_PIXEL_VALUE = 65535 # Max. pixel value, used to normalize the image
+
+EPOCHS = 20
+BATCH_SIZE = 64
+IMAGE_SIZE = (256, 256)
+N_CHANNELS = 3
+N_FILTERS = 16
+
+MASK_ALGORITHM = 'Kumar-Roy'
+
+WORKERS = 4
+EARLY_STOP_PATIENCE = 5 
+CHECKPOINT_PERIOD = 5
+CHECKPOINT_MODEL_NAME = 'checkpoint-{}-{}-epoch_{{epoch:02d}}.hdf5'.format('CNNmodel', MASK_ALGORITHM)
+```
+
+
+
 
 
 
