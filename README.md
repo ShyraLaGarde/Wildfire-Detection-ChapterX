@@ -23,6 +23,11 @@ This repository presents an in-depth exploration of convolutional neural network
     - [iv. GPU Configuration](#iv-GPU-Configuration)
     - [v. Callbacks](#v-Training-Callbacks)
   - [E. Model Training](#E-Model-Training)
+    - [i. Plot Results (without WandB)](#i-Plot-Results)
+  * [Inference](#Inference)
+  * [Metrics](#Metrics)
+   
+  
 
 # Objectives
 
@@ -546,6 +551,160 @@ history = model.fit_generator(
 )
 print('Train finished!')
 ```
+After Traing the model we will want to save our weights.
+```
+print('Saving weights')
+model_weights_output = os.path.join(OUTPUT_DIR, FINAL_WEIGHTS_OUTPUT)
+model.save_weights(model_weights_output)
+print("Weights Saved: {}".format(model_weights_output))
+```
+#### i. Plot Results 
+To visualize our results without WandB we will use the following scripts
+```
+def plot_history(history, out_dir):
+    # Plot training and validation accuracy
+    plt.plot(history.history['accuracy'], label='Training Accuracy')
+    plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+    plt.legend()
+    plt.grid()
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.title('Model Accuracy')
+    plt.savefig(os.path.join(out_dir, "accuracyWANDBS1.png"), dpi=300, bbox_inches='tight')
+    plt.clf()
+    # Plot training and validation loss
+    plt.plot(history.history['loss'], label='Training Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.legend()
+    plt.grid()
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.title('Model Loss')
+    plt.savefig(os.path.join(out_dir, "lossWANDBS1.png"), dpi=300, bbox_inches='tight')
+    plt.clf()
+```
+
+```
+if PLOT_HISTORY:
+    plot_history(history, OUTPUT_DIR)
+```
+# Inference 
+At this point in the guide we will next load the test images and masks, run predictions using our pre-trained model, and save the results for further analysis. This step incorporates useful features like progress tracking, error handling, and saving both the ground truth and predicted masks.
+
+This process begins with setting the timing and CPU for model execution, defining output directories to save the results and logs made during our inference. 
+
+We will use pre-trained model weights and apply a 0.25 fire threshold, therefore any prediction value above this threshold is classified as a fire pixel. 
+```
+start = time.time()
+
+CUDA_DEVICE = 0
+
+OUTPUT_DIR = './log'
+OUTPUT_CSV_FILE = 'output_v1_{}_{}.csv'.format(MODEL_NAME, MASK_ALGORITHM)
+WRITE_OUTPUT = True
+
+WEIGHTS_FILE = './train_output/model_{}_{}_final_weights.h5'.format(MODEL_NAME, MASK_ALGORITHM)
+
+TH_FIRE = 0.25
+```
+
+To ensure reproducible inference results we set a output directory for saving both prediction and ground truth arrays. `CUDA_VISIBLE_DEVICES` ensures TensorFlow uses the specified GPU for inference. GPU configuration allow dynamic memory allocation. 
+Finally we reset the random bit generator to prevent conflicts that may arise in the random number generation. 
+
+```
+if not os.path.exists(os.path.join(OUTPUT_DIR, MASK_ALGORITHM, 'arrays')):
+    os.makedirs(os.path.join(OUTPUT_DIR, MASK_ALGORITHM, 'arrays'))
+
+os.environ["CUDA_VISIBLE_DEVICES"] = str(CUDA_DEVICE)
+
+try:
+    config = tf.compat.v1.ConfigProto()
+    config.gpu_options.allow_growth = True
+    sess = tf.compat.v1.Session(config=config)
+    K.set_session(sess)
+    np.random.bit_generator = np.random._bit_generator
+except:
+    pass
+```
+
+```
+IMAGES_CSV = ''/Users/local/WildfireDetection/Data/S_images_test.csv'
+MASKS_CSV = ''/Users/local/WildfireDetection/Data/S_masks_test.csv'
+
+images_df = pd.read_csv(IMAGES_CSV)
+masks_df = pd.read_csv(MASKS_CSV)
+
+print('Loading images...')
+images = []
+masks = []
+
+images = [ os.path.join(IMAGES_PATH, image) for image in images_df['images'] ]
+masks = [ os.path.join(MASKS_PATH, mask) for mask in masks_df['masks'] ]
+```
+
+```
+model = get_model(MODEL_NAME, input_height=IMAGE_SIZE[0], input_width=IMAGE_SIZE[1], n_filters=N_FILTERS, n_channels=N_CHANNELS)
+model.summary()
+```
+
+```
+WEIGHTS_FILE = '/Users/local/WildfireDetection/train_output/model_CNNmodel_Kumur-Roy_final_weights.h5'
+print('Loading weghts...')
+model.load_weights(WEIGHTS_FILE)
+print('Weights Loaded')
+
+
+print('# of Images: {}'.format( len(images)) )
+print('# of Masks: {}'.format( len(masks)) )
+```
+
+
+
+```
+step = 0
+steps = len(images)
+for image, mask in zip(images, masks):
+    
+    try:
+        
+        # img = get_img_arr(image)
+        img = get_img_762bands(image)
+        
+        mask_name = os.path.splitext(os.path.basename(mask))[0]
+        image_name = os.path.splitext(os.path.basename(image))[0]
+        mask = get_mask_arr(mask)
+
+        txt_mask_path = os.path.join(OUTPUT_DIR, MASK_ALGORITHM, 'arrays', 'grd_' + mask_name + '.txt') 
+        txt_pred_path = os.path.join(OUTPUT_DIR, MASK_ALGORITHM, 'arrays', 'det_' + image_name + '.txt') 
+
+        y_pred = model.predict(np.array( [img] ), batch_size=1)
+
+        y_true = mask[:,:,0] > TH_FIRE
+        y_pred = y_pred[0, :, :, 0] > TH_FIRE
+
+
+        np.savetxt(txt_mask_path, y_true.astype(int), fmt='%i')
+        np.savetxt(txt_pred_path, y_pred.astype(int), fmt='%i')
+
+        step += 1
+        
+        if step%100 == 0:
+            print('Step {} of {}'.format(step, steps)) 
+            
+    except Exception as e:
+        print(e)
+        
+        with open(os.path.join(OUTPUT_DIR, "error_log_inference.txt"), "a+") as myfile:
+            myfile.write(str(e))
+    
+
+print('Done!')
+```
+
+# METRICS 
+```
+```
+
 
 
 
