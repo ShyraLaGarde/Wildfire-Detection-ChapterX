@@ -104,9 +104,9 @@ NOTE: the Number of Kumar-Roy files: 2619 &
 Next we will match images with their corresponding masks based on the file names and save these pairs to a CSV file. This CSV will be used for training, validation, and testing splits. 
 
 EDIT: mask_base = os.path.splitext(mask_file)[0].replace("_Kumar-Roy", "")
-      change ...("_<Study>", "")
+change ...("_<Study>", "")
       
-In this script we are interested in the Kumar Roy Study 
+In this script we are interested in the Kumar-Roy study 
 ```
 # Create new pairs to CSV file based on Kumar-Roy 
 csv_output_file = 'image_mask_pairs.csv'  
