@@ -15,7 +15,14 @@ This repository presents an in-depth exploration of convolutional neural network
 * [Modeling](#Modeling)
   - [A. Parameter Selection](#A-Parameter-Selection)
   - [B. Data Generators](#B-Data-Generators)
-  - [C. Model Archeticture](#C-Model-Archeticture)
+  - [C. Convolution Layers](#C-Convolution-Layers])
+  - [D. Build Model](#D-Build-Model)
+    - [i. Model Archeticture](i-Model-Archeticture)
+    - [ii. Create and Build Model](ii-Create-and-Build-Model)
+    - [iii. Parameter Selection](iii-Parameter-Selection)
+    - [iv. GPU Configuration](#iv-GPU-Configuration)
+    - [v. Callbacks](#v-Training-Callbacks)
+  - [E. Model Training](#E-Model-Training)
 
 # Objectives
 
@@ -208,25 +215,22 @@ masks_test = [os.path.join(MASKS_PATH, mask) for mask in test_masks]
 ```
 
 # Modeling
-Our model was developed for wildfire detection over the Canada Region utilizing a U-Net architecture, a popular choice for image segmentation task. 
+Our model was developed for wildfire detection over the Canada Region using a U-Net architecture, a popular choice for image segmentation task. This part of the guide we guide you through the steps from parameter selection to model building and training.
 
-### A. Parameter Selection
-We will set an output directory to store our model results, initally we evaluate the training and validation accuarcy and loss. We will normilize our 256x256 pixel image pairs. Finally define the hyperparameters used to train our model. 
+### A. Model Set Up
+We will set an output directory to store our model results, initally we evaluate the training and validation accuarcy and loss. We will normilize our 256x256 pixel images and define the hyperparameters used to train our model. 
 ```
 OUTPUT_DIR = './train_output/'
 
 MAX_PIXEL_VALUE = 65535 # Max. pixel value, used to normalize the image
-
-EPOCHS = 20
-BATCH_SIZE = 64
 IMAGE_SIZE = (256, 256)
-N_CHANNELS = 3
-N_FILTERS = 16
 
 MASK_ALGORITHM = 'Kumar-Roy'
 
 WORKERS = 4
-EARLY_STOP_PATIENCE = 5 
+# Early stopping patience threshold
+EARLY_STOP_PATIENCE = 5
+# Save model checkpoints every 5 epochs
 CHECKPOINT_PERIOD = 5
 CHECKPOINT_MODEL_NAME = 'checkpoint-{}-{}-epoch_{{epoch:02d}}.hdf5'.format('CNNmodel', MASK_ALGORITHM)
 ```
@@ -274,7 +278,9 @@ def get_mask_arr(path):
     seg = np.float32(img)
     return seg
 ```
+By introducing thread safety into the data loading process, we load images and corresponding segmentation masks and normalize the image data. The function get_img_arr handles 10-band images, while get_img_762bands loads only specific bands for input. For this experiment our wildfire detection model input will consider the SWIR 1 (band 6), SWIR 2 (band 7), and Blue (band 2).
 
+Next we will create a function to generate batches of images and masks. It shuffles the data each epoch for more robust training, ensuring thread-safe data loading. The shuffle flag and `random_state=42` allow for reproducibility in shuffling.
 ```
 @threadsafe_generator
 def generator_from_lists(images_path, masks_path, batch_size=32, shuffle = True, random_state=None, image_mode='10bands'):
@@ -313,7 +319,6 @@ def generator_from_lists(images_path, masks_path, batch_size=32, shuffle = True,
 ```
 
 This setup is for our machine learning workflow where batches of images and the corresponding masks are fed into a model during training. 
-
 ```
 train_generator = generator_from_lists(images_train, masks_train, batch_size=BATCH_SIZE, random_state=RANDOM_STATE, image_mode="762")
 validation_generator = generator_from_lists(images_validation, masks_validation, batch_size=BATCH_SIZE, random_state=RANDOM_STATE, image_mode="762")
@@ -325,8 +330,9 @@ images, masks = next(train_generator)
 print(f'Images shape: {images.shape}')  
 print(f'Masks shape: {masks.shape}')
 ```
-### C. Model Architecture
-We will need to define a function `conv2d_block` to define a block of two 2D convolutional layers, for our CNN. That will be implemented as a Unet 
+### C. Convolution Layers
+We will need to define a function `conv2d_block` to define a block of two 2D convolutional layers, for our UNet architecture. Each block consists of two convolutional layers followed by batch normalization and ReLU activation. 
+
 ```
 def conv2d_block(input_tensor, n_filters, kernel_size = 3, batchnorm = True):
     # first layer
@@ -343,7 +349,206 @@ def conv2d_block(input_tensor, n_filters, kernel_size = 3, batchnorm = True):
         x = BatchNormalization()(x)
     x = Activation("relu")(x)
     return x
+``` 
+### D. Build Model 
+This section builds the U-Net model for wildfire detection. We stack several conv2d_blocks in both the (down-sampling) and the expansive path (up-sampling)
+To evaluate our experiments we employ Weights & Biases (WandB) functions. To use these resourse we will ave to install WandB and create an account. Follow the link here for instructions on how to use WandB
+
+#### i. Model Architecture 
+The architecture size of the U-Net models defined can be analyzed based on several factors: the number of filters, the input image size, the number of layers, and the operations within each layer.
+  - Input: input_img with shape (256, 256, 10)
+  - n_filters increases by a factor of 2 after each MaxPoolong layer
 ```
+def get_unet(nClasses, input_height=256, input_width=256, n_filters = 16, dropout = 0.1, batchnorm = True, n_channels=10):
+    input_img = Input(shape=(input_height,input_width, n_channels))
+
+    # contracting path
+    c1 = conv2d_block(input_img, n_filters=n_filters*1, kernel_size=3, batchnorm=batchnorm)
+    p1 = MaxPooling2D((2, 2)) (c1)
+    p1 = Dropout(dropout)(p1)
+
+    c2 = conv2d_block(p1, n_filters=n_filters*2, kernel_size=3, batchnorm=batchnorm)
+    p2 = MaxPooling2D((2, 2)) (c2)
+    p2 = Dropout(dropout)(p2)
+
+    c3 = conv2d_block(p2, n_filters=n_filters*4, kernel_size=3, batchnorm=batchnorm)
+    p3 = MaxPooling2D((2, 2)) (c3)
+    p3 = Dropout(dropout)(p3)
+
+    c4 = conv2d_block(p3, n_filters=n_filters*8, kernel_size=3, batchnorm=batchnorm)
+    p4 = MaxPooling2D(pool_size=(2, 2)) (c4)
+    p4 = Dropout(dropout)(p4)
+    
+    c5 = conv2d_block(p4, n_filters=n_filters*16, kernel_size=3, batchnorm=batchnorm)
+    
+    # expansive path
+    u6 = Conv2DTranspose(n_filters*8, (3, 3), strides=(2, 2), padding='same') (c5)
+    u6 = concatenate([u6, c4])
+    u6 = Dropout(dropout)(u6)
+    c6 = conv2d_block(u6, n_filters=n_filters*8, kernel_size=3, batchnorm=batchnorm)
+
+    u7 = Conv2DTranspose(n_filters*4, (3, 3), strides=(2, 2), padding='same') (c6)
+    u7 = concatenate([u7, c3])
+    u7 = Dropout(dropout)(u7)
+    c7 = conv2d_block(u7, n_filters=n_filters*4, kernel_size=3, batchnorm=batchnorm)
+
+    u8 = Conv2DTranspose(n_filters*2, (3, 3), strides=(2, 2), padding='same') (c7)
+    u8 = concatenate([u8, c2])
+    u8 = Dropout(dropout)(u8)
+    c8 = conv2d_block(u8, n_filters=n_filters*2, kernel_size=3, batchnorm=batchnorm)
+
+    u9 = Conv2DTranspose(n_filters*1, (3, 3), strides=(2, 2), padding='same') (c8)
+    u9 = concatenate([u9, c1], axis=3)
+    u9 = Dropout(dropout)(u9)
+    c9 = conv2d_block(u9, n_filters=n_filters*1, kernel_size=3, batchnorm=batchnorm)
+    
+    outputs = Conv2D(1, (1, 1), activation='sigmoid') (c9)
+    model = Model(inputs=[input_img], outputs=[outputs])
+    return model
+```
+#### ii. Create and Build Model 
+We next create a function that will create our U-Net model. The parameters are passed in as arguments, the model reference a configuration dictionary (CFG) that allows the model to be customized. 
+```
+def get_model(model_name='unet', nClasses=1, input_height=128, input_width=128, n_filters = 16, dropout = 0.1, batchnorm = True, n_channels=10):   
+    return model(
+            nClasses      = nClasses,  
+            input_height  = input_height, 
+            input_width   = input_width,
+            n_filters     = CFG['n_filters'],
+            dropout       = CFG['dropout'],
+            batchnorm     = batchnorm,
+            n_channels    = CFG['n_channels']
+        )
+```
+Next we create a function to build the model by calling get_model and passing the relevant parameters. After building the model, it compiles it using the Adam optimizer and sets the loss function to binary cross-entropy suitable for our binary classification task. 
+```
+def build_model():
+    #define model
+    model = get_model(MODEL_NAME, 
+                  input_height=IMAGE_SIZE[0], 
+                  input_width=IMAGE_SIZE[1], 
+                  n_filters=N_FILTERS, 
+                  n_channels=N_CHANNELS)
+
+    model.compile(optimizer = Adam(), 
+                  loss = 'binary_crossentropy', 
+                  metrics = ['accuracy'])
+    return model
+```
+#### iii. Parameter Selection 
+The CFG dictionary that holds key hyperparameters like the number of filters, channels, batch size, and epochs for training. In this step we will also initialize a WandB run for tracking the model's performance and hyperparameters during training.
+```
+CFG = dict(
+    n_filters = 16,
+    n_channels = 3, 
+    epochs = 50,
+    batch_size = 64,
+    dropout = 0.1,   
+)
+
+MODEL_NAME = 'unet'
+# Build model
+model = build_model()
+
+# Initialise run
+run = wandb.init(project = 'WFD-Kumar-Roy',
+                 config = CFG,
+                 save_code = True,
+                 name = 'Base_Metrics',
+)
+```
+Alternatively id you do not have a WandB account set up we can  plot the training and validation curves after training by setting the `PLOT_HISTORY = True `.
+```
+# if True plot the training and validation graphs
+PLOT_HISTORY = True 
+# Schoeder, Murphy or Kumar-Roy
+MASK_ALGORITHM = 'Kumar-Roy'
+
+MODEL_NAME = 'unet'
+RANDOM_STATE = 42
+IMAGES_DATAFRAME = '/Users/<Local>/WildfireDetection/Data/images_masks.csv'
+```
+
+We will need to read a CSV file containing image and mask paths into a pandas DataFrame. This DataFrame will be used later for data generation during model training.
+
+```
+df = pd.read_csv(IMAGES_DATAFRAME, header=None, names=['images', 'masks'])
+```
+
+#### iv. GPU Configuration 
+We will next configure GPU settings and handle checkpointing.
+```
+# If not zero will be load as weights
+INITIAL_EPOCH = 0
+RESTART_FROM_CHECKPOINT = None
+if INITIAL_EPOCH > 0:
+    RESTART_FROM_CHECKPOINT = os.path.join(OUTPUT_DIR, 'checkpoint-{}-{}-epoch_{:02d}.hdf5'.format(MODEL_NAME, MASK_ALGORITHM, INITIAL_EPOCH))
+
+FINAL_WEIGHTS_OUTPUT = 'model_{}_{}_final_weights.h5'.format('CNNmodel', MASK_ALGORITHM)
+
+CUDA_DEVICE = 1
+
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
+
+os.environ["CUDA_VISIBLE_DEVICES"] = str(CUDA_DEVICE)
+try:
+    config = tf.compat.v1.ConfigProto()
+    config.gpu_options.allow_growth = True
+    sess = tf.compat.v1.Session(config=config)
+    K.set_session(sess)
+except:
+    pass
+
+try:
+    np.random.bit_generator = np.random._bit_generator
+except:
+    pass
+```
+#### v. Training Callbacks
+A callback to log model metrics and save the model during training. Our overfiiting protocols include early stopping if the validation loss does not improve and the model saves checkpoints at regular intervals. 
+
+```
+wandb_callback = WandbCallback(
+    monitor='val_loss', 
+    mode='min', 
+    save_model=True
+)
+
+es = EarlyStopping(monitor='val_loss', 
+                   mode='min', 
+                   verbose=1, 
+                   patience=EARLY_STOP_PATIENCE)
+
+checkpoint = ModelCheckpoint(os.path.join(OUTPUT_DIR, CHECKPOINT_MODEL_NAME),
+                             monitor='loss', 
+                             verbose=1,
+                             save_best_only = True, 
+                             mode='auto',
+                             period=CHECKPOINT_PERIOD)
+```
+### E. Model Training 
+To finish our modeling process we have to train our model. The model is trained using the generator we created `train_generator` the validation data is passed using `validation_generator`. Training is tracked and controlled by the callback we defined earlier. 
+```
+if INITIAL_EPOCH > 0:
+    model.load_weights(RESTART_FROM_CHECKPOINT)
+
+print('Training using {}...'.format(MASK_ALGORITHM))
+history = model.fit_generator(
+    train_generator,
+    steps_per_epoch=len(images_train) // CFG['batch_size'],
+    validation_data=validation_generator,
+    validation_steps=len(images_validation) // CFG['batch_size'],
+    callbacks=[wandb_callback, checkpoint],
+    epochs= CFG['epochs'],
+    workers=WORKERS,
+    initial_epoch=INITIAL_EPOCH
+)
+print('Train finished!')
+```
+
+
+
 
 
 
