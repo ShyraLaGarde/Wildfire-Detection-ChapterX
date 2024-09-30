@@ -15,7 +15,7 @@ This repository presents an in-depth exploration of convolutional neural network
 * [Modeling](#Modeling)
   - [A. Parameter Selection](#A-Parameter-Selection)
   - [B. Data Generators](#B-Data-Generators)
-  - [C. Convolution Layers](#C-Convolution-Layers])
+  - [C. Convolution Layers](#C-Convolution-Layers)
   - [D. Build Model](#D-Build-Model)
     - [i. Model Archeticture](i-Model-Archeticture)
     - [ii. Create and Build Model](ii-Create-and-Build-Model)
