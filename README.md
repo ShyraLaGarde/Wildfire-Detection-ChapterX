@@ -627,6 +627,8 @@ except:
     pass
 ```
 
+Our initial step in Inference is to read in CSV files that contain the file paths to test images and their corresponding ground truth masks.
+
 ```
 IMAGES_CSV = ''/Users/local/WildfireDetection/Data/S_images_test.csv'
 MASKS_CSV = ''/Users/local/WildfireDetection/Data/S_masks_test.csv'
@@ -641,25 +643,24 @@ masks = []
 images = [ os.path.join(IMAGES_PATH, image) for image in images_df['images'] ]
 masks = [ os.path.join(MASKS_PATH, mask) for mask in masks_df['masks'] ]
 ```
+Then we initialize the Convolution Neural network model based on the specified architecture and configuration. The model is configured to match the input data in terms of image size and number of channels, ensuring compatibility during inference.
 
 ```
 model = get_model(MODEL_NAME, input_height=IMAGE_SIZE[0], input_width=IMAGE_SIZE[1], n_filters=N_FILTERS, n_channels=N_CHANNELS)
 model.summary()
 ```
-
+Note Our Model Architecture is the following: [IMAGE]
+Next, we will load pre-trained weights into the model for inference.
 ```
 WEIGHTS_FILE = '/Users/local/WildfireDetection/train_output/model_CNNmodel_Kumur-Roy_final_weights.h5'
 print('Loading weghts...')
 model.load_weights(WEIGHTS_FILE)
 print('Weights Loaded')
 
-
 print('# of Images: {}'.format( len(images)) )
 print('# of Masks: {}'.format( len(masks)) )
 ```
-
-
-
+To conclude the Inference section of the guide we we use the following script to iterate through each image and its corresponding mask, perform inference using the model, and save both the ground truth and predicted outputs.
 ```
 step = 0
 steps = len(images)
