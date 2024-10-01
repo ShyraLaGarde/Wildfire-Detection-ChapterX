@@ -630,8 +630,8 @@ except:
 Our initial step in Inference is to read in CSV files that contain the file paths to test images and their corresponding ground truth masks.
 
 ```
-IMAGES_CSV = ''/Users/local/WildfireDetection/Data/S_images_test.csv'
-MASKS_CSV = ''/Users/local/WildfireDetection/Data/S_masks_test.csv'
+IMAGES_CSV = ''/Users/local/WildfireDetection/Data/images_test.csv'
+MASKS_CSV = ''/Users/local/WildfireDetection/Data/masks_test.csv'
 
 images_df = pd.read_csv(IMAGES_CSV)
 masks_df = pd.read_csv(MASKS_CSV)
@@ -660,7 +660,7 @@ print('Weights Loaded')
 print('# of Images: {}'.format( len(images)) )
 print('# of Masks: {}'.format( len(masks)) )
 ```
-To conclude the Inference section of the guide we we use the following script to iterate through each image and its corresponding mask, perform inference using the model, and save both the ground truth and predicted outputs.
+To conclude the Inference section of the guide we use the following script to iterate through each image and its corresponding mask, perform inference using the model, and save both the ground truth and predicted outputs.
 ```
 step = 0
 steps = len(images)
@@ -701,10 +701,122 @@ for image, mask in zip(images, masks):
 
 print('Done!')
 ```
-
 # METRICS 
+At this point in the guide we have Preprocessed data, Trained a UNet using the cleaned data, and generated Inferences on our model. The next part in the guide will provide functions used as key metrics and post-processing steps for evaluating the performance of our  model for wildfire detection. Each metric provides valuable insights into different aspects of the model’s performance, from overall accuracy to detailed region-based analysis.
+
+Dice Coefficient:  is computed by dividing twice the intersection of the predicted `y_pred` and actual masks `y_true` by the sum of their areas. This metric is commonly used in image segmentation tasks to measure the similarity between these mask. 
 ```
+def dice_coef(y_true, y_pred, smooth=1):
+    intersection = K.sum(y_true * y_pred, axis=[1,2,3])
+    union = K.sum(y_true, axis=[1,2,3]) + K.sum(y_pred, axis=[1,2,3])
+    dice = K.mean((2. * intersection + smooth)/(union + smooth), axis=0)
+    return dice
 ```
+Pixel Accuracy: This function computes the pixel accuracy, measuring how many pixels in the predicted mask `y_pred` and actual masks `y_true`. Pixel accuracy is especially useful for evaluating how well the model performs in binary classification of pixels. 
+```
+def pixel_accuracy (y_true, y_pred):
+    sum_n = np.sum(np.logical_and(y_pred, y_true))
+    sum_t = np.sum(y_true)
+ 
+    if (sum_t == 0):
+        pixel_accuracy = 0
+    else:
+        pixel_accuracy = sum_n / sum_t
+    return pixel_accuracy
+```
+The confusion matrix is fundamental for calculating additional metrics such as precision, recall, and F1-score.
+```
+## Confusion Matrix for True/False Negative/Positive 
+# Scikit 
+def statistics (y_true, y_pred):
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+    return tn, fp, fn, tp
+
+# data-centric approch
+def statistics2 (y_true, y_pred):
+    py_actu = pd.Series(y_true, name='Actual')
+    py_pred = pd.Series(y_pred, name='Predicted')
+    df_confusion = pd.crosstab(py_actu, py_pred)
+    return df_confusion[0][0], df_confusion[0][1], df_confusion[1][0], df_confusion[1][1]
+
+# manually
+def statistics3 (y_true, y_pred):
+    y_pred_neg = 1 - y_pred
+    y_expected_neg = 1 - y_true
+
+    tp = np.sum(y_pred * y_true)
+    tn = np.sum(y_pred_neg * y_expected_neg)
+    fp = np.sum(y_pred * y_expected_neg)
+    fn = np.sum(y_pred_neg * y_true)
+    return tn, fp, fn, tp
+```
+Jaccard Index: is computed as the ratio of the intersection of the predicted and actual masks to their union. The Jaccard Index tends to penalize false positives more, making it stricter for evaluating segmentation.
+```
+def jaccard3 (im1, im2):
+    """
+    Computes the Jaccard metric, a measure of set similarity.
+    Parameters 
+    ----------
+    im1 : array-like, bool
+        Any array of arbitrary size. If not boolean, will be converted.
+    im2 : array-like, bool
+        Any other array of identical size. If not boolean, will be converted.
+    Returns
+    -------
+    jaccard : float 
+        Jaccard metric returned is a float on range [0,1].
+        Maximum similarity = 1
+        No similarity = 0
+    Notes
+    -----
+    The order of inputs for `jaccard` is irrelevant. The result will be
+    identical if `im1` and `im2` are switched.
+    """
+
+    im1 = np.asarray(im1).astype(np.bool)
+    im2 = np.asarray(im2).astype(np.bool)
+
+    if im1.shape != im2.shape:
+        raise ValueError("Shape mismatch: im1 and im2 must have the same shape.")
+
+    intersection = np.logical_and(im1, im2)
+    union = np.logical_or(im1, im2)
+    jaccard_fire = intersection.sum() / float(union.sum())
+
+    im1 = np.logical_not(im1)
+    im2 = np.logical_not(im2)
+
+    im1 = np.asarray(im1).astype(np.bool)
+    im2 = np.asarray(im2).astype(np.bool)
+
+    if im1.shape != im2.shape:
+        raise ValueError("Shape mismatch: im1 and im2 must have the same shape.")
+
+    intersection = np.logical_and(im1, im2)
+    union = np.logical_or(im1, im2)
+    jaccard_non_fire = intersection.sum() / float(union.sum())
+    jaccard_avg = (jaccard_fire + jaccard_non_fire)/2
+
+    return jaccard_fire, jaccard_non_fire, jaccard_avg
+```
+This next function labels connected components in a binary image, which helps identify distinct regions of fire in the predicted `y_pred` or ground truth mask `y_true`. The second function relabels regions in the predicted mask `y_pred` based on the ground truth `y_true`, ensuring that the predicted labels correspond to the true labels.
+```
+def connected_components (array):
+    structure = np.ones((3, 3), dtype=np.int)  # 8-neighboorhood
+    labeled, ncomponents = label(array, structure)
+    return labeled
+
+def region_relabel (y_true, y_pred):
+    index = 0
+    for p in y_true:
+        if y_pred[index] == 1:
+            if y_true[index] > 0:
+                y_pred[index] = y_true[index]
+            else:
+                y_pred[index] = 999
+        index += 1
+```
+
 
 
 
